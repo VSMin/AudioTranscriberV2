@@ -2,8 +2,8 @@
 AudioTranscriber Bot is a powerful Telegram bot that utilizes the cutting-edge speech recognition capabilities of AssemblyAI to effortlessly transcribe audio files into text. Whether it's a speech, lecture, interview, or any other audio content, AudioTranscriber Bot swiftly and accurately converts it into written text for your convenience.
 
 # 🚀 How to Use 🚀
-- 🤖 Start the bot by sending the /start command.
-- 🔑 Enter the command /transcribe and input your API Key to activate the bot.
+- 🤖 Start the bot by sending the ```/start``` command.
+- 🔑 Enter the command ```/transcribe``` and input your API Key to activate the bot.
 - 🎧 Send an audio file or a voice message in OGG or WAV format to the bot.
 - 💬 AudioTranscriber Bot instantly processes the file and transcribes it into text.
 - 📝 Receive the transcribed text as a reply from the bot.
