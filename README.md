@@ -54,64 +54,67 @@
       margin-right: 5px;
     }
 
-    .icon-start {
-      background-image: url("https://example.com/start-icon.png");
+    .icon-instagram {
+      background-image: url("https://example.com/insta-icon.png");
     }
 
-    .icon-api {
-      background-image: url("https://example.com/api-icon.png");
+    .icon-twitter {
+      background-image: url("https://example.com/twitter-icon.png");
     }
 
-    .icon-github {
-      background-image: url("https://example.com/github-icon.png");
+    .icon-telegram {
+      background-image: url("https://example.com/tg-icon.png");
+    }
+
+    .icon-website {
+      background-image: url("https://example.com/web-icon.png");
     }
   </style>
 </head>
 
 <body>
-  <h1>AudioTranscriber Bot 🎤 📝</h1>
-  <div class="center">
-    <img class="bot-logo" src="https://example.com/bot-icon.png" alt="AudioTranscriber Bot Logo">
-  </div>
-
-  <h2>🚀 How to Use 🚀</h2>
-  <p>🤖 Start the bot: Send the /start command.</p>
-  <p>🔑 Activate the bot: Enter the /transcribe command and input your API Key.</p>
-  <p>🎧 Send audio: Share an audio file or a voice message in OGG or WAV format to the bot.</p>
-  <p>💬 Receive transcription: AudioTranscriber Bot will instantly process the file and reply with the transcribed
-    text.</p>
-
-  <h2>🔒 Privacy 🔒</h2>
-  <p>Rest assured that your audio files and transcribed text are kept private and secure. AudioTranscriber Bot does
-    not store any user data, and all processing is done in real-time using AssemblyAI's secure API.</p>
-
-  <h2>🌐 AssemblyAI API 🌐</h2>
-  <p>AudioTranscriber Bot is based on AssemblyAI API, a state-of-the-art automatic speech recognition system. To use
-    the bot for transcription, you need an AssemblyAI API key. Don't worry; we've made it super easy to obtain your
-    API key! Simply visit AssemblyAI's website to get started.</p>
-
-  <p class="center">
-    <a class="btn" href="https://t.me/SpeechTransBot">
-      <span class="icon icon-start"></span>Join the fun: @SpeechTransBot
-    </a>
+  <p align="center">
+    <img src="https://capsule-render.vercel.app/api?text=Hey%20there!%F0%9F%95%B9%EF%B8%8F&animation=fadeIn&type=waving&color=gradient&height=100" />
   </p>
 
-  <h2>🎉 Try it Now! 🎉</h2>
-  <p>Start transcribing your audio files and voice messages into text with ease. Say goodbye to manual transcription
-    and let AudioTranscriber Bot handle the heavy lifting for you. Get accurate and speedy transcriptions right in
-    your Telegram chat!</p>
+  <p align="center">
+    <img src="Itachi.gif" width="300" height="300" frameBorder="0" class="giphy-embed" allowFullScreen></img>
+  </p>
 
-  <div class="note">
-    <p><strong>📎 Note 📎</strong></p>
-    <p>This repository is dedicated to the Telegram bot version of AudioTranscriber. If you're interested in the
-      terminal-based version, check out our separate repository:</p>
-    <p class="center">
-      <a class="btn" href="https://github.com/Armancollab/AudioTranscriber">
-        <span class="icon icon-github"></span>Terminal Version Repository
-      </a>
-    </p>
-    <p class="center">🎧 Happy transcribing! 📝</p>
+  <p align="center">👋 Hello, I'm Arman!</p>
+  <p align="center">A passionate student from Afghanistan 🇦🇫</p>
+  <p align="center">Currently learning Fullstack and Web Development</p>
+  <p align="center">My dream is to leverage technology to empower the young generation and improve the tech landscape in my home country.</p>
+
+  <div align="center">
+    <a href="https://www.instagram.com/_rmnaf/" class="btn">
+      <span class="icon icon-instagram"></span>
+    </a>
+    <a href="https://www.twitter.com/_rmnaf7/" class="btn">
+      <span class="icon icon-twitter"></span>
+    </a>
+    <a href="https://t.me/devnull9" class="btn">
+      <span class="icon icon-telegram"></span>
+    </a>
+    <a href="https://ArmanCollab.github.io" class="btn">
+      <span class="icon icon-website"></span>
+    </a>
   </div>
+
+  <h2 align="center">🚀 Skills</h2>
+  <p align="center">
+    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/html5/html5-original.svg" alt="html5" width="45" height="45" align="center" />
+    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/css3/css3-original.svg" alt="css3" width="45" height="45" align="center" />
+    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" alt="python" width="45" height="45" align="center" />
+    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/linux/linux-original.svg" alt="linux" width="45" height="45" align="center" />
+    <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vscode/vscode-original.svg" alt="vscode" width="45" height="45" align="center" />
+  </p>
+
+  <p align="center">
+    <a href="https://github.com/kittinan/spotify-github-profile">
+      <img src="https://spotify-github-profile.vercel.app/api/view?uid=31uiu4yv7zgddelzxxejrbshy6h4&cover_image=true&theme=novatorem&show_offline=false&background_color=121212&interchange=false&bar_color=6dceee&bar_color_cover=false" />
+    </a>
+  </p>
 </body>
 
 </html>
