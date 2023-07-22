@@ -75,34 +75,31 @@
   </div>
 
   <h2>🚀 How to Use 🚀</h2>
-  <ol>
-    <li><strong>🤖 Start the bot:</strong> Send the <span class="btn">/start</span> command.</li>
-    <li><strong>🔑 Activate the bot:</strong> Enter the <span class="btn">/transcribe</span> command and input your API
-      Key.</li>
-    <li><strong>🎧 Send audio:</strong> Share an audio file or a voice message in OGG or WAV format to the bot.</li>
-    <li><strong>💬 Receive transcription:</strong> AudioTranscriber Bot will instantly process the file and reply with the
-      transcribed text.</li>
-  </ol>
+  <p>🤖 Start the bot: Send the /start command.</p>
+  <p>🔑 Activate the bot: Enter the /transcribe command and input your API Key.</p>
+  <p>🎧 Send audio: Share an audio file or a voice message in OGG or WAV format to the bot.</p>
+  <p>💬 Receive transcription: AudioTranscriber Bot will instantly process the file and reply with the transcribed
+    text.</p>
 
   <h2>🔒 Privacy 🔒</h2>
-  <p>Rest assured that your audio files and transcribed text are kept private and secure. AudioTranscriber Bot does not
-    store any user data, and all processing is done in real-time using AssemblyAI's secure API.</p>
+  <p>Rest assured that your audio files and transcribed text are kept private and secure. AudioTranscriber Bot does
+    not store any user data, and all processing is done in real-time using AssemblyAI's secure API.</p>
 
   <h2>🌐 AssemblyAI API 🌐</h2>
-  <p>AudioTranscriber Bot is based on AssemblyAI API, a state-of-the-art automatic speech recognition system. To use the
-    bot for transcription, you need an AssemblyAI API key. Don't worry; we've made it super easy to obtain your API key!
-    Simply visit <a href="https://www.assemblyai.com/">AssemblyAI's website</a> to get started.</p>
+  <p>AudioTranscriber Bot is based on AssemblyAI API, a state-of-the-art automatic speech recognition system. To use
+    the bot for transcription, you need an AssemblyAI API key. Don't worry; we've made it super easy to obtain your
+    API key! Simply visit AssemblyAI's website to get started.</p>
 
-  <div class="center">
+  <p class="center">
     <a class="btn" href="https://t.me/SpeechTransBot">
       <span class="icon icon-start"></span>Join the fun: @SpeechTransBot
     </a>
-  </div>
+  </p>
 
   <h2>🎉 Try it Now! 🎉</h2>
-  <p>Start transcribing your audio files and voice messages into text with ease. Say goodbye to manual transcription and
-    let AudioTranscriber Bot handle the heavy lifting for you. Get accurate and speedy transcriptions right in your
-    Telegram chat!</p>
+  <p>Start transcribing your audio files and voice messages into text with ease. Say goodbye to manual transcription
+    and let AudioTranscriber Bot handle the heavy lifting for you. Get accurate and speedy transcriptions right in
+    your Telegram chat!</p>
 
   <div class="note">
     <p><strong>📎 Note 📎</strong></p>
