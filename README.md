@@ -1,25 +1,120 @@
-<p align="center"><img src="https://example.com/bot-icon.png" alt="AudioTranscriber Bot Logo"></p>
-AudioTranscriber Bot 🎤 📝
-AudioTranscriber Bot is a powerful Telegram bot that utilizes the cutting-edge speech recognition capabilities of AssemblyAI to effortlessly transcribe audio files into text. Whether it's a speech, lecture, interview, or any other audio content, AudioTranscriber Bot swiftly and accurately converts it into written text for your convenience.
+<!DOCTYPE html>
+<html>
 
-🚀 How to Use 🚀
-🤖 Start the bot by sending the /start command.
-🔑 Enter the command /transcribe and input your API Key to activate the bot.
-🎧 Send an audio file or a voice message in OGG or WAV format to the bot.
-💬 AudioTranscriber Bot instantly processes the file and transcribes it into text.
-📝 Receive the transcribed text as a reply from the bot.
-🔒 Privacy 🔒
-Your audio files and transcribed text are treated with utmost confidentiality and security. AudioTranscriber Bot does not retain any user data, ensuring your privacy. All processing occurs in real-time using AssemblyAI's secure API.
+<head>
+  <title>AudioTranscriber Bot</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+    }
 
-🌐 AssemblyAI API 🌐
-AudioTranscriber Bot leverages AssemblyAI API, an advanced automatic speech recognition system. To unlock the bot's transcription capabilities, you'll need an AssemblyAI API key. Obtaining your API key is a breeze! Simply visit AssemblyAI's website to get started.
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
 
-🎉 Try it Now! 🎉
-Transcribe your audio files and voice messages with ease. Bid farewell to manual transcription, and let AudioTranscriber Bot do the heavy lifting for you. Enjoy swift and accurate transcriptions right in your Telegram chat!
+    .bot-logo {
+      display: block;
+      margin: 0 auto;
+      width: 200px;
+    }
 
-📎 Note 📎
-This repository is dedicated to the Telegram bot version of AudioTranscriber. If you're interested in the terminal-based version, check out our separate repository here.
+    .center {
+      text-align: center;
+    }
 
-🎧 Happy transcribing! 📝
+    .btn {
+      background-color: #008CBA;
+      color: white;
+      padding: 10px 20px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      border-radius: 4px;
+    }
 
-🤖 Join the fun: @SpeechTransBot
+    .btn:hover {
+      background-color: #005B7F;
+    }
+
+    .note {
+      background-color: #f2f2f2;
+      padding: 10px;
+      margin-top: 30px;
+    }
+
+    .icon {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      vertical-align: middle;
+      margin-right: 5px;
+    }
+
+    .icon-start {
+      background-image: url("https://example.com/start-icon.png");
+    }
+
+    .icon-api {
+      background-image: url("https://example.com/api-icon.png");
+    }
+
+    .icon-github {
+      background-image: url("https://example.com/github-icon.png");
+    }
+  </style>
+</head>
+
+<body>
+  <h1>AudioTranscriber Bot 🎤 📝</h1>
+  <div class="center">
+    <img class="bot-logo" src="https://example.com/bot-icon.png" alt="AudioTranscriber Bot Logo">
+  </div>
+
+  <h2>🚀 How to Use 🚀</h2>
+  <ol>
+    <li><strong>🤖 Start the bot:</strong> Send the <span class="btn">/start</span> command.</li>
+    <li><strong>🔑 Activate the bot:</strong> Enter the <span class="btn">/transcribe</span> command and input your API
+      Key.</li>
+    <li><strong>🎧 Send audio:</strong> Share an audio file or a voice message in OGG or WAV format to the bot.</li>
+    <li><strong>💬 Receive transcription:</strong> AudioTranscriber Bot will instantly process the file and reply with the
+      transcribed text.</li>
+  </ol>
+
+  <h2>🔒 Privacy 🔒</h2>
+  <p>Rest assured that your audio files and transcribed text are kept private and secure. AudioTranscriber Bot does not
+    store any user data, and all processing is done in real-time using AssemblyAI's secure API.</p>
+
+  <h2>🌐 AssemblyAI API 🌐</h2>
+  <p>AudioTranscriber Bot is based on AssemblyAI API, a state-of-the-art automatic speech recognition system. To use the
+    bot for transcription, you need an AssemblyAI API key. Don't worry; we've made it super easy to obtain your API key!
+    Simply visit <a href="https://www.assemblyai.com/">AssemblyAI's website</a> to get started.</p>
+
+  <div class="center">
+    <a class="btn" href="https://t.me/SpeechTransBot">
+      <span class="icon icon-start"></span>Join the fun: @SpeechTransBot
+    </a>
+  </div>
+
+  <h2>🎉 Try it Now! 🎉</h2>
+  <p>Start transcribing your audio files and voice messages into text with ease. Say goodbye to manual transcription and
+    let AudioTranscriber Bot handle the heavy lifting for you. Get accurate and speedy transcriptions right in your
+    Telegram chat!</p>
+
+  <div class="note">
+    <p><strong>📎 Note 📎</strong></p>
+    <p>This repository is dedicated to the Telegram bot version of AudioTranscriber. If you're interested in the
+      terminal-based version, check out our separate repository:</p>
+    <p class="center">
+      <a class="btn" href="https://github.com/Armancollab/AudioTranscriber">
+        <span class="icon icon-github"></span>Terminal Version Repository
+      </a>
+    </p>
+    <p class="center">🎧 Happy transcribing! 📝</p>
+  </div>
+</body>
+
+</html>
