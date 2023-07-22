@@ -1,4 +1,5 @@
-🎤 AudioTranscriber Bot 📝
+<p align="center"><img src="https://example.com/bot-icon.png" alt="AudioTranscriber Bot Logo"></p>
+AudioTranscriber Bot 🎤 📝
 AudioTranscriber Bot is a powerful Telegram bot that utilizes the cutting-edge speech recognition capabilities of AssemblyAI to effortlessly transcribe audio files into text. Whether it's a speech, lecture, interview, or any other audio content, AudioTranscriber Bot swiftly and accurately converts it into written text for your convenience.
 
 🚀 How to Use 🚀
@@ -11,7 +12,7 @@ AudioTranscriber Bot is a powerful Telegram bot that utilizes the cutting-edge s
 Your audio files and transcribed text are treated with utmost confidentiality and security. AudioTranscriber Bot does not retain any user data, ensuring your privacy. All processing occurs in real-time using AssemblyAI's secure API.
 
 🌐 AssemblyAI API 🌐
-AudioTranscriber Bot leverages AssemblyAI API, an advanced automatic speech recognition system. To unlock the bot's transcription capabilities, you'll need an AssemblyAI API key. Obtaining your API key is a breeze! Simply visit AssemblyAI's website 🔗 to get started.
+AudioTranscriber Bot leverages AssemblyAI API, an advanced automatic speech recognition system. To unlock the bot's transcription capabilities, you'll need an AssemblyAI API key. Obtaining your API key is a breeze! Simply visit AssemblyAI's website to get started.
 
 🎉 Try it Now! 🎉
 Transcribe your audio files and voice messages with ease. Bid farewell to manual transcription, and let AudioTranscriber Bot do the heavy lifting for you. Enjoy swift and accurate transcriptions right in your Telegram chat!
