@@ -69,6 +69,8 @@ def handle_audio(message):
             time.sleep(5)
 
     except Exception as e:
-        bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
+        print("==== RAW TRANSCRIPT ====")
+        print(poll["text"])
+        bot.reply_to(message, f"📝 Готово:\n\n{poll['text'] or '⚠️ Нет распознанного текста.'}")
 
 bot.polling(none_stop=True)
