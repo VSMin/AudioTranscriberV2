@@ -4,7 +4,7 @@ import telebot
 from telebot.types import Message
 from keep_alive import keep_alive
 
-bot_token = os.environ.get('BOT_TOKEN')
+bot_token = os.environ.get('TELEGRAM_TOKEN')
 
 # Initialize the Telegram bot with your bot token
 bot = telebot.TeleBot(bot_token)
