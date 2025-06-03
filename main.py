@@ -42,7 +42,10 @@ def handle_audio(message):
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
-            json={"audio_url": audio_url}
+            json={
+                "audio_url": audio_url,
+                "language_code": "ru"  # ← добавили явно
+            }
         )
 
         transcript_id = transcript_req.json().get("id")
@@ -58,7 +61,8 @@ def handle_audio(message):
         while True:
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
             if poll["status"] == "completed":
-                bot.reply_to(message, f"📝 Готово:\n\n{poll['text'][:4000]}")
+                print("📋 Текст:", poll["text"])
+                bot.reply_to(message, f"📝 Готово:\n\n{poll['text'] or '⚠️ Нет распознанного текста.'}")
                 break
             elif poll["status"] == "error":
                 bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
@@ -69,8 +73,6 @@ def handle_audio(message):
             time.sleep(5)
 
     except Exception as e:
-        print("==== RAW TRANSCRIPT ====")
-        print(poll["text"])
-        bot.reply_to(message, f"📝 Готово:\n\n{poll['text'] or '⚠️ Нет распознанного текста.'}")
+        bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
 
 bot.polling(none_stop=True)
