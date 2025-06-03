@@ -11,7 +11,7 @@ if not bot_token or not assembly_key:
     raise ValueError("TELEGRAM_TOKEN или ASSEMBLYAI_API_KEY не заданы")
 
 bot = telebot.TeleBot(bot_token)
-keep_alive()  # Flask-сервер, чтобы Railway не засыпал
+keep_alive()
 
 @bot.message_handler(content_types=['audio', 'voice'])
 def handle_audio(message):
@@ -33,18 +33,19 @@ def handle_audio(message):
             data=audio_data
         )
         if upload_resp.status_code != 200:
-            bot.reply_to(message, f"❌ Ошибка загрузки в AssemblyAI: {upload_resp.text}")
+            bot.reply_to(message, f"❌ Ошибка загрузки: {upload_resp.text}")
             return
 
         audio_url = upload_resp.json()["upload_url"]
 
-        # Запрашиваем транскрипцию
+        # Запрашиваем транскрипцию с разделением по голосам
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
             json={
                 "audio_url": audio_url,
-                "language_code": "ru"  # ← добавили явно
+                "language_code": "ru",
+                "speaker_labels": True  # <-- включаем разделение по спикерам
             }
         )
 
@@ -55,21 +56,33 @@ def handle_audio(message):
 
         bot.reply_to(message, "🔁 Обрабатываю...")
 
-        # Polling
+        # Ожидание результата
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         start_time = time.time()
         while True:
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
             if poll["status"] == "completed":
-                print("📋 Текст:", poll["text"])
-                bot.reply_to(message, f"📝 Готово:\n\n{poll['text'] or '⚠️ Нет распознанного текста.'}")
+                # Если есть разбивка по спикерам
+                if "utterances" in poll:
+                    result = ""
+                    for utt in poll["utterances"]:
+                        who = "👨 Менеджер" if utt["speaker"] == 0 else "👤 Клиент"
+                        result += f"{who}: {utt['text']}\n"
+                else:
+                    # fallback — обычный текст
+                    result = poll["text"] or "⚠️ Нет распознанного текста."
+
+                bot.reply_to(message, f"📝 Готово:\n\n{result}")
                 break
+
             elif poll["status"] == "error":
                 bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
                 break
+
             elif time.time() - start_time > 60:
                 bot.reply_to(message, "⏰ Timeout: файл обрабатывается слишком долго.")
                 break
+
             time.sleep(5)
 
     except Exception as e:
