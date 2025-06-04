@@ -38,14 +38,14 @@ def handle_audio(message):
 
         audio_url = upload_resp.json()["upload_url"]
 
-        # Запрашиваем транскрипцию с разделением по голосам
+        # Запрос транскрипции с разделением по голосам
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
             json={
                 "audio_url": audio_url,
                 "language_code": "ru",
-                "speaker_labels": True  # <-- включаем разделение по спикерам
+                "speaker_labels": True
             }
         )
 
@@ -56,31 +56,27 @@ def handle_audio(message):
 
         bot.reply_to(message, "🔁 Обрабатываю...")
 
-        # Ожидание результата
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         start_time = time.time()
+
         while True:
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
             if poll["status"] == "completed":
-                # Если есть разбивка по спикерам
                 if "utterances" in poll:
-                    result = ""
                     utterances = poll["utterances"]
-                
                     first_speaker = utterances[0]["speaker"]
                     second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), None)
-                
+
                     speaker_map = {
                         first_speaker: "👨 Менеджер",
                         second_speaker: "👤 Клиент"
-    }
+                    }
 
-    for utt in utterances:
-        who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
-        result += f"{who}: {utt['text']}\n"
-
+                    result = ""
+                    for utt in utterances:
+                        who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
+                        result += f"{who}: {utt['text']}\n"
                 else:
-                    # fallback — обычный текст
                     result = poll["text"] or "⚠️ Нет распознанного текста."
 
                 bot.reply_to(message, f"📝 Готово:\n\n{result}")
