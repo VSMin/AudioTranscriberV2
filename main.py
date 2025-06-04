@@ -65,9 +65,20 @@ def handle_audio(message):
                 # Если есть разбивка по спикерам
                 if "utterances" in poll:
                     result = ""
-                    for utt in poll["utterances"]:
-                        who = "👨 Менеджер" if utt["speaker"] == 0 else "👤 Клиент"
-                        result += f"{who}: {utt['text']}\n"
+                    utterances = poll["utterances"]
+                
+                    first_speaker = utterances[0]["speaker"]
+                    second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), None)
+                
+                    speaker_map = {
+                        first_speaker: "👨 Менеджер",
+                        second_speaker: "👤 Клиент"
+    }
+
+    for utt in utterances:
+        who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
+        result += f"{who}: {utt['text']}\n"
+
                 else:
                     # fallback — обычный текст
                     result = poll["text"] or "⚠️ Нет распознанного текста."
