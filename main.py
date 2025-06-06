@@ -5,12 +5,12 @@ import requests
 import openai
 from keep_alive import keep_alive
 
-# Получаем токены из переменных окружения
+# Ключи
 bot_token = os.getenv("TELEGRAM_TOKEN")
 assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Проверка, что ключи заданы
+# Проверка ключей
 if not bot_token or not assembly_key or not openai.api_key:
     raise ValueError("Один или несколько API ключей не заданы")
 
@@ -42,7 +42,7 @@ def handle_audio(message):
 
         audio_url = upload_resp.json()["upload_url"]
 
-        # Запрос транскрипции
+        # Запрашиваем транскрипцию
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
@@ -60,6 +60,7 @@ def handle_audio(message):
 
         bot.reply_to(message, "🔁 Распознаю речь...")
 
+        # Polling
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         start_time = time.time()
 
@@ -67,51 +68,55 @@ def handle_audio(message):
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
             if poll["status"] == "completed":
                 utterances = poll.get("utterances", [])
-                first_speaker = utterances[0]["speaker"] if utterances else 0
-                second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), first_speaker + 1)
+                if not utterances:
+                    text = poll.get("text", "")
+                    if not text:
+                        bot.reply_to(message, "⚠️ Нет распознанного текста.")
+                        return
+                    result_text = text
+                else:
+                    first_speaker = utterances[0]["speaker"]
+                    second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), first_speaker + 1)
+                    speaker_map = {
+                        first_speaker: "👨 Менеджер",
+                        second_speaker: "👤 Клиент"
+                    }
+                    result_text = ""
+                    for u in utterances:
+                        who = speaker_map.get(u["speaker"], f"🗣 Спикер {str(u['speaker'])}")
+                        result_text += f"{who}: {u['text']}\n"
 
-                speaker_map = {
-                    first_speaker: "👨 Менеджер",
-                    second_speaker: "👤 Клиент"
-                }
+                bot.reply_to(message, f"📄 Транскрипция завершена:\n\n{result_text[:3000]}")  # обрезаем для Telegram
 
-                result = ""
-                for utt in utterances:
-                    who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
-                    result += f"{who}: {utt['text']}\n"
-
-                # Генерация анализа GPT
                 bot.reply_to(message, "📊 Анализирую разговор...")
 
-                prompt = f"""
-Ты — ассистент по обучению продажам. Проанализируй следующий диалог и:
-1. Выдели сильные стороны менеджера.
-2. Найди слабые стороны или ошибки.
-3. Дай рекомендации, как улучшить разговор.
-
-Диалог:
-{result}
-"""
-
-                completion = openai.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "Ты опытный тренер по продажам, специализирующийся на оценке телефонных звонков."},
-                        {"role": "user", "content": prompt}
-                    ]
+                # Анализ текста
+                prompt = (
+                    "Проанализируй следующий диалог между менеджером и клиентом. "
+                    "Выдели сильные и слабые стороны менеджера, оцени беседу по 10-балльной шкале и предложи, "
+                    "что можно улучшить в его ответах.\n\n"
+                    f"{result_text}"
                 )
 
-                analysis = completion.choices[0].message.content
+                chat_resp = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "Ты эксперт по продажам и анализу звонков."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
 
-                bot.reply_to(message, f"📝 Текст разговора:\n\n{result}\n\n💡 Анализ:\n{analysis}")
+                analysis = chat_resp["choices"][0]["message"]["content"]
+                bot.reply_to(message, f"📋 Отчет:\n\n{analysis[:3000]}")  # тоже ограничиваем
                 break
 
             elif poll["status"] == "error":
                 bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
                 break
 
-            elif time.time() - start_time > 120:
-                bot.reply_to(message, "⏰ Timeout: файл обрабатывается слишком долго.")
+            elif time.time() - start_time > 90:
+                bot.reply_to(message, "⏰ Timeout: обработка слишком долгая.")
                 break
 
             time.sleep(5)
