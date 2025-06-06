@@ -2,87 +2,42 @@ import os
 import time
 import requests
 import telebot
-from io import BytesIO
+from fpdf import FPDF
 from keep_alive import keep_alive
-import openai
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.lib.units import cm
+from openai import OpenAI
 
-# Подключаем переменные окружения
+# Получаем ключи из переменных окружения
 bot_token = os.getenv("TELEGRAM_TOKEN")
 assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
 
-if not bot_token or not assembly_key or not openai.api_key:
+if not bot_token or not assembly_key or not openai_key:
     raise ValueError("Один или несколько API ключей не заданы")
 
 bot = telebot.TeleBot(bot_token)
 keep_alive()
 
-def generate_pdf(dialog_text, analysis_text):
-    buffer = BytesIO()
+client = OpenAI(api_key=openai_key)
 
-    # Используем встроенный шрифт для поддержки Юникода
-    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+class PDF(FPDF):
+    def header(self):
+        self.set_font("Arial", size=12)
+        self.cell(0, 10, "Отчет по звонку", ln=True, align="C")
 
-    c = canvas.Canvas(buffer, pagesize=A4)
-    c.setFont('HeiseiKakuGo-W5', 12)
-    width, height = A4
-    x, y = 2 * cm, height - 2 * cm
-
-    def draw_text_block(title, text):
-        nonlocal y
-        c.setFont('HeiseiKakuGo-W5', 14)
-        c.drawString(x, y, title)
-        y -= 20
-        c.setFont('HeiseiKakuGo-W5', 12)
-        for line in text.split("\n"):
-            if y < 2 * cm:
-                c.showPage()
-                y = height - 2 * cm
-                c.setFont('HeiseiKakuGo-W5', 12)
-            c.drawString(x, y, line)
-            y -= 15
-        y -= 10
-
-    draw_text_block("Диалог", dialog_text)
-    draw_text_block("Анализ", analysis_text)
-
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-def analyze_dialog(dialog_text):
-    prompt = (
-        "Ты эксперт по продажам. Проанализируй диалог менеджера и клиента:\n"
-        "1. Сильные стороны менеджера\n"
-        "2. Слабые места\n"
-        "3. Рекомендации по улучшению\n\n"
-        f"Диалог:\n{dialog_text}"
-    )
-
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Ты эксперт по оценке звонков в продажах."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"⚠️ Ошибка анализа: {e}"
+    def add_section(self, title, content):
+        self.set_font("Arial", style='B', size=12)
+        self.multi_cell(0, 10, title)
+        self.set_font("Arial", size=11)
+        self.multi_cell(0, 8, content)
+        self.ln()
 
 @bot.message_handler(content_types=['audio', 'voice'])
 def handle_audio(message):
     try:
         file_id = message.audio.file_id if message.audio else message.voice.file_id
         file_info = bot.get_file(file_id)
-        file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_info.file_path}"
+        file_path = file_info.file_path
+        file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
 
         bot.reply_to(message, "⏳ Загружаю файл...")
 
@@ -121,30 +76,57 @@ def handle_audio(message):
 
         while True:
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
-
             if poll["status"] == "completed":
                 utterances = poll.get("utterances", [])
-                if utterances:
-                    speaker_a = utterances[0]["speaker"]
-                    speaker_b = next((u["speaker"] for u in utterances if u["speaker"] != speaker_a), None)
-                    speaker_map = {
-                        speaker_a: "Менеджер",
-                        speaker_b: "Клиент"
-                    }
-                    dialog_text = ""
-                    for utt in utterances:
-                        speaker = speaker_map.get(utt["speaker"], f"Спикер {utt['speaker']}")
-                        dialog_text += f"{speaker}: {utt['text']}\n"
-                else:
-                    dialog_text = poll.get("text", "⚠️ Нет распознанного текста.")
+                if not utterances:
+                    bot.reply_to(message, "⚠️ Текст не распознан.")
+                    return
+
+                first_speaker = utterances[0]["speaker"]
+                second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), None)
+                speaker_map = {
+                    first_speaker: "👨 Менеджер",
+                    second_speaker: "👤 Клиент"
+                }
+
+                dialog_text = ""
+                for utt in utterances:
+                    who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
+                    dialog_text += f"{who}: {utt['text']}\n"
 
                 bot.reply_to(message, "📊 Анализирую разговор...")
-                analysis = analyze_dialog(dialog_text)
+
+                prompt = (
+                    "Ты — ассистент по продажам. Проанализируй следующий диалог между менеджером и клиентом:\n\n"
+                    f"{dialog_text}\n\n"
+                    "Выдели:\n"
+                    "- Сильные стороны менеджера\n"
+                    "- Слабые стороны менеджера\n"
+                    "- Общую оценку разговора по 5-балльной шкале\n"
+                    "- Конкретные рекомендации по улучшению разговора\n\n"
+                    "Ответ на русском языке."
+                )
+
+                completion = client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                analysis = completion.choices[0].message.content
 
                 bot.reply_to(message, "📄 Формирую отчет...")
-                pdf_buffer = generate_pdf(dialog_text, analysis)
 
-                bot.send_document(message.chat.id, ("report.pdf", pdf_buffer))
+                pdf = PDF()
+                pdf.add_page()
+                pdf.add_section("📄 Расшифровка диалога", dialog_text)
+                pdf.add_section("📊 Анализ разговора", analysis)
+
+                pdf_path = "/mnt/data/отчет_по_звонку.pdf"
+                pdf.output(pdf_path)
+
+                with open(pdf_path, "rb") as f:
+                    bot.send_document(message.chat.id, f, caption="✅ Готовый PDF-отчет")
+
                 break
 
             elif poll["status"] == "error":
@@ -152,7 +134,7 @@ def handle_audio(message):
                 break
 
             elif time.time() - start_time > 60:
-                bot.reply_to(message, "⏰ Тайм-аут: файл обрабатывается слишком долго.")
+                bot.reply_to(message, "⏰ Timeout: файл обрабатывается слишком долго.")
                 break
 
             time.sleep(5)
