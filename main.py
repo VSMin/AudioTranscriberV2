@@ -2,62 +2,65 @@ import os
 import time
 import requests
 import telebot
-from fpdf import FPDF
 from io import BytesIO
 from keep_alive import keep_alive
 import openai
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.lib.units import cm
 
-# Получение токенов из переменных окружения
+# Подключаем переменные окружения
 bot_token = os.getenv("TELEGRAM_TOKEN")
 assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Проверка токенов
-if not bot_token or not assembly_key or not openai_key:
+if not bot_token or not assembly_key or not openai.api_key:
     raise ValueError("Один или несколько API ключей не заданы")
 
-# Настройка OpenAI
-openai.api_key = openai_key
-
-# Инициализация бота
 bot = telebot.TeleBot(bot_token)
 keep_alive()
 
-
 def generate_pdf(dialog_text, analysis_text):
-    pdf = FPDF()
-    pdf.add_page()
+    buffer = BytesIO()
 
-    # Используем встроенный шрифт, поддерживающий кириллицу, и избегаем emoji
-    pdf.set_font("Arial", size=12)
+    # Используем встроенный шрифт для поддержки Юникода
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
 
-    pdf.set_font("Arial", style='B', size=14)
-    pdf.cell(0, 10, "Отчет по звонку", ln=True, align="C")
-    pdf.ln(5)
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setFont('HeiseiKakuGo-W5', 12)
+    width, height = A4
+    x, y = 2 * cm, height - 2 * cm
 
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, "Диалог:", ln=True)
-    pdf.set_font("Arial", size=11)
-    pdf.multi_cell(0, 8, dialog_text)
-    pdf.ln(5)
+    def draw_text_block(title, text):
+        nonlocal y
+        c.setFont('HeiseiKakuGo-W5', 14)
+        c.drawString(x, y, title)
+        y -= 20
+        c.setFont('HeiseiKakuGo-W5', 12)
+        for line in text.split("\n"):
+            if y < 2 * cm:
+                c.showPage()
+                y = height - 2 * cm
+                c.setFont('HeiseiKakuGo-W5', 12)
+            c.drawString(x, y, line)
+            y -= 15
+        y -= 10
 
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, "Анализ:", ln=True)
-    pdf.set_font("Arial", size=11)
-    pdf.multi_cell(0, 8, analysis_text)
+    draw_text_block("Диалог", dialog_text)
+    draw_text_block("Анализ", analysis_text)
 
-    output = BytesIO()
-    pdf.output(output)
-    output.seek(0)
-    return output
-
+    c.save()
+    buffer.seek(0)
+    return buffer
 
 def analyze_dialog(dialog_text):
     prompt = (
-        "Ты эксперт по продажам. Проанализируй диалог менеджера и клиента.\n"
-        "1. Выдели сильные стороны менеджера\n"
-        "2. Отметь слабые места и недочёты\n"
-        "3. Дай рекомендации по улучшению разговора\n\n"
+        "Ты эксперт по продажам. Проанализируй диалог менеджера и клиента:\n"
+        "1. Сильные стороны менеджера\n"
+        "2. Слабые места\n"
+        "3. Рекомендации по улучшению\n\n"
         f"Диалог:\n{dialog_text}"
     )
 
@@ -65,7 +68,7 @@ def analyze_dialog(dialog_text):
         response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "Ты помощник по оценке продаж."},
+                {"role": "system", "content": "Ты эксперт по оценке звонков в продажах."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7
@@ -74,34 +77,28 @@ def analyze_dialog(dialog_text):
     except Exception as e:
         return f"⚠️ Ошибка анализа: {e}"
 
-
 @bot.message_handler(content_types=['audio', 'voice'])
 def handle_audio(message):
     try:
         file_id = message.audio.file_id if message.audio else message.voice.file_id
         file_info = bot.get_file(file_id)
-        file_path = file_info.file_path
-        file_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
+        file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_info.file_path}"
 
         bot.reply_to(message, "⏳ Загружаю файл...")
 
-        # Скачиваем файл
         audio_data = requests.get(file_url).content
 
-        # Загрузка в AssemblyAI
         upload_resp = requests.post(
             "https://api.assemblyai.com/v2/upload",
             headers={"authorization": assembly_key},
             data=audio_data
         )
-
         if upload_resp.status_code != 200:
             bot.reply_to(message, f"❌ Ошибка загрузки: {upload_resp.text}")
             return
 
         audio_url = upload_resp.json()["upload_url"]
 
-        # Запрос транскрипции
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
@@ -119,7 +116,6 @@ def handle_audio(message):
 
         bot.reply_to(message, "🔁 Распознаю речь...")
 
-        # Ожидание завершения транскрипции
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         start_time = time.time()
 
@@ -137,24 +133,22 @@ def handle_audio(message):
                     }
                     dialog_text = ""
                     for utt in utterances:
-                        speaker_label = speaker_map.get(utt["speaker"], f"Спикер {utt['speaker']}")
-                        dialog_text += f"{speaker_label}: {utt['text']}\n"
+                        speaker = speaker_map.get(utt["speaker"], f"Спикер {utt['speaker']}")
+                        dialog_text += f"{speaker}: {utt['text']}\n"
                 else:
                     dialog_text = poll.get("text", "⚠️ Нет распознанного текста.")
 
-                # Генерация анализа
                 bot.reply_to(message, "📊 Анализирую разговор...")
                 analysis = analyze_dialog(dialog_text)
 
-                # Генерация PDF
                 bot.reply_to(message, "📄 Формирую отчет...")
-                pdf_file = generate_pdf(dialog_text, analysis)
-                bot.send_document(message.chat.id, ("report.pdf", pdf_file))
+                pdf_buffer = generate_pdf(dialog_text, analysis)
 
+                bot.send_document(message.chat.id, ("report.pdf", pdf_buffer))
                 break
 
             elif poll["status"] == "error":
-                bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll.get('error')}")
+                bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
                 break
 
             elif time.time() - start_time > 60:
@@ -165,6 +159,5 @@ def handle_audio(message):
 
     except Exception as e:
         bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
-
 
 bot.polling(none_stop=True)
