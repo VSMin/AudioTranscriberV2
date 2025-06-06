@@ -2,19 +2,20 @@ import os
 import time
 import telebot
 import requests
-import openai
+from openai import OpenAI
 from fpdf import FPDF
 from keep_alive import keep_alive
 
-# Токены
+# API токены из переменных окружения
 bot_token = os.getenv("TELEGRAM_TOKEN")
 assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 
-if not bot_token or not assembly_key or not openai.api_key:
+if not bot_token or not assembly_key or not openai_api_key:
     raise ValueError("Один или несколько API ключей не заданы")
 
 bot = telebot.TeleBot(bot_token)
+client = OpenAI(api_key=openai_api_key)
 keep_alive()
 
 @bot.message_handler(content_types=['audio', 'voice'])
@@ -27,10 +28,8 @@ def handle_audio(message):
 
         bot.reply_to(message, "⏳ Загружаю файл...")
 
-        # Скачиваем аудио
         audio_data = requests.get(file_url).content
 
-        # Загрузка в AssemblyAI
         upload_resp = requests.post(
             "https://api.assemblyai.com/v2/upload",
             headers={"authorization": assembly_key},
@@ -42,7 +41,6 @@ def handle_audio(message):
 
         audio_url = upload_resp.json()["upload_url"]
 
-        # Запрос транскрипции
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
             headers={"authorization": assembly_key},
@@ -81,7 +79,6 @@ def handle_audio(message):
             bot.reply_to(message, "⚠️ Не удалось разделить голоса.")
             return
 
-        # Определение ролей
         first_speaker = utterances[0]["speaker"]
         second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), None)
         speaker_map = {
@@ -94,39 +91,33 @@ def handle_audio(message):
             who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
             dialogue += f"{who}: {utt['text']}\n"
 
-        # Анализ через OpenAI
-        analysis_prompt = f"""Ты — эксперт по продажам. Проанализируй разговор ниже. 
-Определи сильные и слабые стороны менеджера, ошибки, и дай рекомендации по улучшению:
-
-{dialogue}"""
-
-        response = openai.ChatCompletion.create(
+        # GPT-анализ через OpenAI (новый синтаксис)
+        chat_response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Ты — эксперт по продажам, помогаешь улучшить работу менеджеров."},
-                {"role": "user", "content": analysis_prompt}
+                {"role": "system", "content": "Ты — эксперт по продажам. Анализируй диалог менеджера с клиентом."},
+                {"role": "user", "content": f"Анализируй следующий диалог и дай советы для менеджера:\n\n{dialogue}"}
             ]
         )
-        analysis = response["choices"][0]["message"]["content"]
 
-        # Генерация PDF отчета
+        analysis = chat_response.choices[0].message.content
+
+        # Генерация PDF
         pdf = FPDF()
         pdf.add_page()
-        pdf.add_font('DejaVu', '', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', uni=True)
-        pdf.set_font("DejaVu", size=12)
-
-        pdf.multi_cell(0, 10, "📋 Транскрипция:\n" + dialogue)
+        pdf.add_font('ArialUnicode', '', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', uni=True)
+        pdf.set_font("ArialUnicode", size=12)
+        pdf.multi_cell(0, 10, "📋 Диалог:\n" + dialogue)
         pdf.ln(5)
-        pdf.set_font("DejaVu", style='B', size=12)
-        pdf.cell(0, 10, "📈 Анализ разговора:", ln=True)
-        pdf.set_font("DejaVu", size=12)
+        pdf.set_font("ArialUnicode", style='B', size=12)
+        pdf.cell(0, 10, "📈 Анализ:", ln=True)
+        pdf.set_font("ArialUnicode", size=12)
         pdf.multi_cell(0, 10, analysis)
 
-        file_path = f"/tmp/report_{file_id}.pdf"
-        pdf.output(file_path)
+        pdf_path = f"/tmp/report_{file_id}.pdf"
+        pdf.output(pdf_path)
 
-        # Отправляем PDF
-        with open(file_path, "rb") as f:
+        with open(pdf_path, "rb") as f:
             bot.send_document(message.chat.id, f)
 
     except Exception as e:
