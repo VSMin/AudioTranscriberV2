@@ -2,20 +2,21 @@ import os
 import time
 import telebot
 import requests
-import io
 from fpdf import FPDF
 from keep_alive import keep_alive
-import openai
+from openai import OpenAI
 
-# Переменные окружения
+# Инициализация API ключей
 bot_token = os.getenv("TELEGRAM_TOKEN")
 assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai_key = os.getenv("OPENAI_API_KEY")
 
-if not bot_token or not assembly_key or not openai.api_key:
+if not bot_token or not assembly_key or not openai_key:
     raise ValueError("Один или несколько API ключей не заданы")
 
+# Telegram бот
 bot = telebot.TeleBot(bot_token)
+client = OpenAI(api_key=openai_key)
 keep_alive()
 
 @bot.message_handler(content_types=['audio', 'voice'])
@@ -23,10 +24,10 @@ def handle_audio(message):
     try:
         file_id = message.audio.file_id if message.audio else message.voice.file_id
         file_info = bot.get_file(file_id)
-        file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_info.file_path}"
-        bot.reply_to(message, "⏳ Загружаю файл...")
+        file_path = file_info.file_path
+        file_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
 
-        # Скачиваем аудио
+        bot.reply_to(message, "⏳ Загружаю файл...")
         audio_data = requests.get(file_url).content
 
         # Загрузка в AssemblyAI
@@ -35,12 +36,11 @@ def handle_audio(message):
             headers={"authorization": assembly_key},
             data=audio_data
         )
-        upload_json = upload_resp.json()
-        if "upload_url" not in upload_json:
-            bot.reply_to(message, f"❌ Ошибка загрузки: {upload_json}")
+        if upload_resp.status_code != 200:
+            bot.reply_to(message, f"❌ Ошибка загрузки: {upload_resp.text}")
             return
 
-        audio_url = upload_json["upload_url"]
+        audio_url = upload_resp.json()["upload_url"]
 
         # Запрос транскрипции
         transcript_req = requests.post(
@@ -52,89 +52,77 @@ def handle_audio(message):
                 "speaker_labels": True
             }
         )
+
         transcript_id = transcript_req.json().get("id")
         if not transcript_id:
-            bot.reply_to(message, "❌ Ошибка создания транскрипта.")
+            bot.reply_to(message, f"❌ Ошибка создания транскрипта: {transcript_req.text}")
             return
 
         bot.reply_to(message, "🔁 Обрабатываю...")
-
-        # Ожидание завершения транскрипции
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         start_time = time.time()
+
         while True:
             poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
-
             if poll["status"] == "completed":
-                utterances = poll.get("utterances", [])
-                if not utterances:
-                    text = poll.get("text", "⚠️ Нет распознанного текста.")
-                    send_report_pdf(message.chat.id, text, "Не удалось определить роли", "Анализ невозможен.")
-                    return
+                if "utterances" in poll:
+                    utterances = poll["utterances"]
+                    first_speaker = utterances[0]["speaker"]
+                    second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), None)
 
-                # Определяем роли участников
-                speaker_roles = {}
-                for utt in utterances:
-                    if any(word in utt["text"].lower() for word in ["коннект", "интернет", "видеонаблюден"]):
-                        speaker_roles[utt["speaker"]] = "👨 Менеджер"
-                    elif utt["speaker"] not in speaker_roles:
-                        speaker_roles[utt["speaker"]] = "👤 Клиент"
+                    speaker_map = {
+                        first_speaker: "👨 Менеджер",
+                        second_speaker: "👤 Клиент"
+                    }
 
-                # Сборка диалога
-                dialogue = ""
-                for utt in utterances:
-                    who = speaker_roles.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
-                    dialogue += f"{who}: {utt['text']}\n"
+                    dialogue = ""
+                    for utt in utterances:
+                        who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
+                        dialogue += f"{who}: {utt['text']}\n"
+                else:
+                    dialogue = poll["text"] or "⚠️ Нет распознанного текста."
 
-                # Анализ с OpenAI
-                gpt_response = openai.chat.completions.create(
+                # Генерация анализа GPT
+                response = client.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "Ты анализируешь телефонный звонок менеджера по продажам. Выдели сильные и слабые стороны, и предложи краткие рекомендации, как улучшить разговор."
-                        },
-                        {
-                            "role": "user",
-                            "content": dialogue
-                        }
+                        {"role": "system", "content": "Ты анализируешь телефонный звонок менеджера по продажам. Выдели сильные и слабые стороны, и предложи краткие рекомендации, как улучшить разговор."},
+                        {"role": "user", "content": dialogue}
                     ]
                 )
-                analysis = gpt_response.choices[0].message.content.strip()
+                analysis = response.choices[0].message.content.strip()
 
-                # Генерация и отправка PDF
-                send_report_pdf(message.chat.id, dialogue, "Автоопределение ролей", analysis)
+                # PDF генерация
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", size=12)
+                pdf.multi_cell(0, 10, "Транскрипция звонка:\n\n" + dialogue)
+                pdf.ln(5)
+                pdf.set_font("Arial", style='B', size=12)
+                pdf.cell(0, 10, "Анализ звонка:", ln=True)
+                pdf.set_font("Arial", size=12)
+                pdf.multi_cell(0, 10, analysis)
+
+                pdf_output = f"report_{transcript_id}.pdf"
+                pdf.output(pdf_output)
+
+                with open(pdf_output, "rb") as f:
+                    bot.send_document(message.chat.id, f, caption="📄 Отчёт готов")
+
+                os.remove(pdf_output)
                 break
 
             elif poll["status"] == "error":
-                bot.reply_to(message, f"❌ Ошибка транскрипции: {poll.get('error')}")
+                bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
                 break
 
             elif time.time() - start_time > 60:
-                bot.reply_to(message, "⏰ Превышено время ожидания.")
+                bot.reply_to(message, "⏰ Timeout: файл обрабатывается слишком долго.")
                 break
 
             time.sleep(5)
 
     except Exception as e:
-        bot.reply_to(message, f"🚨 Внутренняя ошибка:\n\n{e}")
-
-# Генерация PDF отчета
-def send_report_pdf(chat_id, dialogue, roles_info, analysis):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_font("Arial", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
-    pdf.set_font("Arial", size=12)
-
-    pdf.multi_cell(0, 10, f"📋 Транскрипция звонка:\n\n{dialogue}\n\n")
-    pdf.multi_cell(0, 10, f"🔎 Роли: {roles_info}\n\n")
-    pdf.multi_cell(0, 10, f"📊 Анализ разговора:\n{analysis}")
-
-    pdf_output = io.BytesIO()
-    pdf.output(pdf_output)
-    pdf_output.seek(0)
-
-    bot.send_document(chat_id, ("report.pdf", pdf_output))
+        bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
 
 bot.polling(none_stop=True)
