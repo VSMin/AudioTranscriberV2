@@ -1,139 +1,138 @@
 import os
 import time
-import telebot
 import requests
+import telebot
+from io import BytesIO
 from fpdf import FPDF
-import openai
 from keep_alive import keep_alive
+from openai import OpenAI
 
-# Получаем переменные окружения
-bot_token = os.getenv("TELEGRAM_TOKEN")
-assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# API ключи
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not bot_token or not assembly_key or not openai.api_key:
+if not all([TELEGRAM_TOKEN, ASSEMBLYAI_API_KEY, OPENAI_API_KEY]):
     raise ValueError("Один или несколько API ключей не заданы")
 
-bot = telebot.TeleBot(bot_token)
-keep_alive()  # Запускает Flask-сервер на Railway, чтобы бот не засыпал
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Обработчик входящих аудиосообщений
+keep_alive()
+
+def analyze_call(text):
+    prompt = f"""
+Ты — эксперт по обучению менеджеров по продажам. Проанализируй следующий диалог между менеджером и клиентом:
+
+{text}
+
+1. Определи сильные стороны менеджера.
+2. Укажи слабые стороны.
+3. Дай рекомендации, как можно было провести разговор лучше.
+4. Укажи итоговую оценку разговора по 10-балльной шкале.
+
+Ответ выдай кратко и чётко, на русском языке.
+"""
+    response = openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_pdf(dialog_text, analysis_text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+
+    pdf.multi_cell(0, 10, "📞 Отчет по звонку", align="C")
+    pdf.ln(5)
+
+    pdf.set_font("Helvetica", size=11)
+    pdf.multi_cell(0, 8, "🗒 Диалог:\n", align="L")
+    pdf.set_font("Helvetica", size=10)
+    pdf.multi_cell(0, 7, dialog_text)
+    pdf.ln(5)
+
+    pdf.set_font("Helvetica", size=11)
+    pdf.multi_cell(0, 8, "📊 Анализ разговора:\n", align="L")
+    pdf.set_font("Helvetica", size=10)
+    pdf.multi_cell(0, 7, analysis_text)
+
+    output = BytesIO()
+    pdf.output(output)
+    output.seek(0)
+    return output
+
 @bot.message_handler(content_types=['audio', 'voice'])
 def handle_audio(message):
     try:
         file_id = message.audio.file_id if message.audio else message.voice.file_id
         file_info = bot.get_file(file_id)
-        file_url = f'https://api.telegram.org/file/bot{bot_token}/{file_info.file_path}'
-        bot.reply_to(message, "⏳ Загружаю файл...")
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_info.file_path}"
 
+        bot.reply_to(message, "⏳ Загружаю и обрабатываю файл...")
+
+        # Скачиваем аудио
         audio_data = requests.get(file_url).content
 
-        # Загрузка в AssemblyAI
+        # Загружаем в AssemblyAI
         upload_resp = requests.post(
             "https://api.assemblyai.com/v2/upload",
-            headers={"authorization": assembly_key},
+            headers={"authorization": ASSEMBLYAI_API_KEY},
             data=audio_data
-        )
-        if upload_resp.status_code != 200:
-            bot.reply_to(message, f"❌ Ошибка загрузки: {upload_resp.text}")
+        ).json()
+        audio_url = upload_resp.get("upload_url")
+
+        if not audio_url:
+            bot.reply_to(message, "❌ Ошибка загрузки в AssemblyAI.")
             return
 
-        audio_url = upload_resp.json()["upload_url"]
-
-        # Запрос транскрипции
+        # Запрос на транскрипцию
         transcript_req = requests.post(
             "https://api.assemblyai.com/v2/transcript",
-            headers={"authorization": assembly_key},
+            headers={"authorization": ASSEMBLYAI_API_KEY},
             json={
                 "audio_url": audio_url,
                 "language_code": "ru",
                 "speaker_labels": True
             }
-        )
-        transcript_id = transcript_req.json().get("id")
+        ).json()
+        transcript_id = transcript_req.get("id")
+
         if not transcript_id:
-            bot.reply_to(message, f"❌ Ошибка создания транскрипта: {transcript_req.text}")
+            bot.reply_to(message, "❌ Ошибка инициализации транскрипции.")
             return
 
-        bot.reply_to(message, "🔁 Распознаю речь...")
+        polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
 
         # Ожидание результата
-        polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
-        start_time = time.time()
-        while True:
-            poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
+        for _ in range(60):
+            time.sleep(5)
+            poll = requests.get(polling_url, headers={"authorization": ASSEMBLYAI_API_KEY}).json()
             if poll["status"] == "completed":
                 utterances = poll.get("utterances", [])
-                if not utterances:
-                    result_text = poll.get("text", "⚠️ Нет распознанного текста.")
-                else:
-                    # Распределение по ролям
-                    speaker0 = utterances[0]["speaker"]
-                    speaker1 = next((u["speaker"] for u in utterances if u["speaker"] != speaker0), speaker0)
-                    speaker_map = {
-                        speaker0: "👨 Менеджер",
-                        speaker1: "👤 Клиент"
-                    }
-                    result_text = ""
-                    for utt in utterances:
-                        who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
-                        result_text += f"{who}: {utt['text']}\n"
-                break
+                first = utterances[0]["speaker"]
+                second = next((u["speaker"] for u in utterances if u["speaker"] != first), None)
+                speaker_map = {
+                    first: "👨 Менеджер",
+                    second: "👤 Клиент"
+                }
+                dialogue = ""
+                for utt in utterances:
+                    who = speaker_map.get(utt["speaker"], f"🗣 Спикер {utt['speaker']}")
+                    dialogue += f"{who}: {utt['text']}\n"
+
+                analysis = analyze_call(dialogue)
+                pdf_file = generate_pdf(dialogue, analysis)
+                bot.send_document(message.chat.id, pdf_file, visible_file_name="отчет_по_звонку.pdf")
+                return
+
             elif poll["status"] == "error":
-                bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
+                bot.reply_to(message, f"❌ Ошибка транскрипции: {poll['error']}")
                 return
-            elif time.time() - start_time > 120:
-                bot.reply_to(message, "⏰ Timeout: обработка слишком долгая.")
-                return
-            time.sleep(5)
 
-        # Отправка текста в OpenAI на анализ
-        bot.reply_to(message, "🧠 Анализирую диалог...")
-
-        prompt = f"""Проанализируй разговор менеджера и клиента. Укажи:
-1. Сильные стороны менеджера
-2. Слабые стороны или ошибки
-3. Общую оценку беседы
-4. Рекомендации по улучшению
-
-Диалог:
-{result_text}
-"""
-        completion = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3
-        )
-        analysis_text = completion.choices[0].message.content.strip()
-
-        # Создание PDF-отчета
-        class PDF(FPDF):
-            def header(self):
-                self.set_font("Arial", "B", 14)
-                self.cell(0, 10, "Отчёт по разговору", ln=True, align="C")
-                self.ln(5)
-
-            def footer(self):
-                self.set_y(-15)
-                self.set_font("Arial", "I", 8)
-                self.cell(0, 10, f"Страница {self.page_no()}", align="C")
-
-        pdf = PDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        pdf.multi_cell(0, 10, "📋 Диалог:\n\n" + result_text)
-        pdf.ln(5)
-        pdf.set_font("Arial", style="B", size=12)
-        pdf.cell(0, 10, "📊 Анализ:", ln=True)
-        pdf.set_font("Arial", size=12)
-        pdf.multi_cell(0, 10, analysis_text)
-
-        pdf_path = f"/tmp/report_{file_id}.pdf"
-        pdf.output(pdf_path)
-
-        with open(pdf_path, "rb") as pdf_file:
-            bot.send_document(message.chat.id, pdf_file, caption="📎 Отчёт по разговору")
-
+        bot.reply_to(message, "⏰ Превышено время ожидания.")
     except Exception as e:
         bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
 
