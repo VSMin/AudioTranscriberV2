@@ -2,6 +2,6 @@ assemblyai
 telebot==0.0.5
 requests==2.26.0
 fpdf==1.7.2
-openai>=1.3.5
+openai>=0.28
 reportlab
 flask
