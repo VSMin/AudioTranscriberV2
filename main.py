@@ -1,127 +1,71 @@
 import os
 import time
-import telebot
 import requests
-import openai
-from keep_alive import keep_alive
+from telegram import Update, Bot
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# Ключи
-bot_token = os.getenv("TELEGRAM_TOKEN")
-assembly_key = os.getenv("ASSEMBLYAI_API_KEY")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+ASSEMBLY_KEY = "ad65dc7849144c6c9832ab85649d6554"
+TELEGRAM_TOKEN = "ВАШ_ТЕЛЕГРАМ_ТОКЕН"
 
-# Проверка ключей
-if not bot_token or not assembly_key or not openai.api_key:
-    raise ValueError("Один или несколько API ключей не заданы")
+HEADERS = {"authorization": ASSEMBLY_KEY}
 
-bot = telebot.TeleBot(bot_token)
-keep_alive()
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Привет! Отправь мне аудиофайл (mp3/wav), и я расшифрую его текст.")
 
-@bot.message_handler(content_types=['audio', 'voice'])
-def handle_audio(message):
-    try:
-        file_id = message.audio.file_id if message.audio else message.voice.file_id
-        file_info = bot.get_file(file_id)
-        file_path = file_info.file_path
-        file_url = f'https://api.telegram.org/file/bot{bot_token}/{file_path}'
-
-        bot.reply_to(message, "⏳ Загружаю файл...")
-
-        # Скачиваем аудио
-        audio_data = requests.get(file_url).content
-
-        # Загружаем в AssemblyAI
+def transcribe_file(file_path):
+    with open(file_path, 'rb') as f:
         upload_resp = requests.post(
             "https://api.assemblyai.com/v2/upload",
-            headers={"authorization": assembly_key},
-            data=audio_data
+            headers=HEADERS,
+            files={'file': f}
         )
-        if upload_resp.status_code != 200:
-            bot.reply_to(message, f"❌ Ошибка загрузки: {upload_resp.text}")
-            return
+    audio_url = upload_resp.json()["upload_url"]
 
-        audio_url = upload_resp.json()["upload_url"]
+    transcript_resp = requests.post(
+        "https://api.assemblyai.com/v2/transcript",
+        headers=HEADERS,
+        json={"audio_url": audio_url, "language_code": "ru"}
+    )
+    transcript_id = transcript_resp.json()["id"]
 
-        # Запрашиваем транскрипцию
-        transcript_req = requests.post(
-            "https://api.assemblyai.com/v2/transcript",
-            headers={"authorization": assembly_key},
-            json={
-                "audio_url": audio_url,
-                "language_code": "ru",
-                "speaker_labels": True
-            }
-        )
+    # Polling
+    while True:
+        poll = requests.get(f"https://api.assemblyai.com/v2/transcript/{transcript_id}", headers=HEADERS)
+        status = poll.json()["status"]
+        if status == "completed":
+            return poll.json()["text"]
+        elif status == "error":
+            return f"Ошибка: {poll.json()['error']}"
+        time.sleep(5)
 
-        transcript_id = transcript_req.json().get("id")
-        if not transcript_id:
-            bot.reply_to(message, f"❌ Ошибка создания транскрипта: {transcript_req.text}")
-            return
+def handle_audio(update: Update, context: CallbackContext):
+    file = update.message.audio or update.message.voice or update.message.document
+    if not file:
+        update.message.reply_text("Пожалуйста, отправь mp3/wav файл.")
+        return
 
-        bot.reply_to(message, "🔁 Распознаю речь...")
+    file_path = f"{file.file_id}.mp3"
+    file.get_file().download(file_path)
 
-        # Polling
-        polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
-        start_time = time.time()
+    update.message.reply_text("Обрабатываю... ⏳")
 
-        while True:
-            poll = requests.get(polling_url, headers={"authorization": assembly_key}).json()
-            if poll["status"] == "completed":
-                utterances = poll.get("utterances", [])
-                if not utterances:
-                    text = poll.get("text", "")
-                    if not text:
-                        bot.reply_to(message, "⚠️ Нет распознанного текста.")
-                        return
-                    result_text = text
-                else:
-                    first_speaker = utterances[0]["speaker"]
-                    second_speaker = next((u["speaker"] for u in utterances if u["speaker"] != first_speaker), first_speaker + 1)
-                    speaker_map = {
-                        first_speaker: "👨 Менеджер",
-                        second_speaker: "👤 Клиент"
-                    }
-                    result_text = ""
-                    for u in utterances:
-                        who = speaker_map.get(u["speaker"], f"🗣 Спикер {str(u['speaker'])}")
-                        result_text += f"{who}: {u['text']}\n"
+    text = transcribe_file(file_path)
+    os.remove(file_path)
 
-                bot.reply_to(message, f"📄 Транскрипция завершена:\n\n{result_text[:3000]}")  # обрезаем для Telegram
+    if text:
+        update.message.reply_text("📝 Текст звонка:\n\n" + text[:4000])  # Telegram ограничение
+    else:
+        update.message.reply_text("Ошибка при транскрибации.")
 
-                bot.reply_to(message, "📊 Анализирую разговор...")
+def main():
+    updater = Updater(TELEGRAM_TOKEN)
+    dp = updater.dispatcher
 
-                # Анализ текста
-                prompt = (
-                    "Проанализируй следующий диалог между менеджером и клиентом. "
-                    "Выдели сильные и слабые стороны менеджера, оцени беседу по 10-балльной шкале и предложи, "
-                    "что можно улучшить в его ответах.\n\n"
-                    f"{result_text}"
-                )
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.audio | Filters.voice | Filters.document, handle_audio))
 
-                chat_resp = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "Ты эксперт по продажам и анализу звонков."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7
-                )
+    updater.start_polling()
+    updater.idle()
 
-                analysis = chat_resp["choices"][0]["message"]["content"]
-                bot.reply_to(message, f"📋 Отчет:\n\n{analysis[:3000]}")  # тоже ограничиваем
-                break
-
-            elif poll["status"] == "error":
-                bot.reply_to(message, f"❌ Ошибка AssemblyAI: {poll['error']}")
-                break
-
-            elif time.time() - start_time > 90:
-                bot.reply_to(message, "⏰ Timeout: обработка слишком долгая.")
-                break
-
-            time.sleep(5)
-
-    except Exception as e:
-        bot.reply_to(message, f"🚨 Внутренняя ошибка:\n{e}")
-
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    main()
