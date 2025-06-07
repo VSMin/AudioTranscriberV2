@@ -1,7 +1,5 @@
-assemblyai
-telebot==0.0.5
-requests==2.26.0
-fpdf==1.7.2
-openai>=0.28
-reportlab
-flask
+python-telegram-bot==20.7
+requests
+openai
+python-dotenv
+tqdm
